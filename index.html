@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Realistic AI Avatar with Head and Facial Tracking</title>
+  <title>Realistic AI Avatar with Gesture Tracking</title>
   <style>
     body { 
       margin: 0; 
@@ -19,7 +19,9 @@
       left: 10px; 
       width: 320px; 
       height: 240px; 
-      z-index: 1;
+    }
+    #analysisCanvas { 
+      display: none; 
     }
     #sidebar {
       position: fixed;
@@ -33,7 +35,6 @@
       padding: 20px;
       color: #fff;
       box-sizing: border-box;
-      z-index: 2;
     }
     #sidebar.open {
       right: 0;
@@ -44,59 +45,25 @@
     #sidebar p {
       font-size: 16px;
     }
-    #sidebar-button {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      padding: 10px 20px;
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
-      color: #fff;
-      font-size: 16px;
-      cursor: pointer;
-      z-index: 3;
-      border-radius: 5px;
-    }
-    #sidebar-button:hover {
-      background: rgba(255, 255, 255, 0.4);
-    }
-    .color-option {
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      display: inline-block;
-      margin: 5px;
-      cursor: pointer;
-      border: 2px solid transparent;
-    }
-    .color-option.selected {
-      border-color: #fff;
-    }
   </style>
 </head>
 <body>
-  <video id="video" autoplay muted></video>
-  <button id="sidebar-button">Toggle Sidebar</button>
+  <video id="video" width="320" height="240" autoplay></video>
+  <canvas id="analysisCanvas" width="320" height="240"></canvas>
   <div id="sidebar">
     <h2>Control Panel</h2>
-    <p>Select a skin color for the avatar:</p>
-    <div id="color-picker">
-      <div class="color-option" style="background-color: #e0ac69;" data-color="0xe0ac69"></div>
-      <div class="color-option" style="background-color: #f4c7ab;" data-color="0xf4c7ab"></div>
-      <div class="color-option" style="background-color: #c68b59;" data-color="0xc68b59"></div>
-      <div class="color-option" style="background-color: #8d5524;" data-color="0x8d5524"></div>
-      <div class="color-option" style="background-color: #d9a384;" data-color="0xd9a384"></div>
-    </div>
+    <p>Open your palm to show this sidebar, close your fist to hide it.</p>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <script>
     // Webcam setup
     const video = document.getElementById('video');
     navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => video.srcObject = stream)
-      .catch(err => console.error("Webcam access error:", err));
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => console.error("Error accessing webcam:", err));
 
     // Three.js setup
     const scene = new THREE.Scene();
@@ -114,7 +81,7 @@
     scene.add(directionalLight);
 
     // Load GLTF head model
-    let head, jawBone, leftEyeBone, rightEyeBone, leftBrowBone, rightBrowBone;
+    let head, jawBone;
     const loader = new THREE.GLTFLoader();
     loader.load(
       'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/LeePerrySmith/LeePerrySmith.glb',
@@ -124,51 +91,23 @@
         head.position.set(0, 0, 0);
         scene.add(head);
 
-        // Find or simulate bones
+        // Find jaw bone
         head.traverse((node) => {
-          if (node.isBone) {
-            if (node.name.toLowerCase().includes('jaw')) {
-              jawBone = node;
-            }
-            if (node.name.toLowerCase().includes('lefteye') || node.name.toLowerCase().includes('eyeleft')) {
-              leftEyeBone = node;
-            } else if (node.name.toLowerCase().includes('righteye') || node.name.toLowerCase().includes('eyeright')) {
-              rightEyeBone = node;
-            } else if (node.name.toLowerCase().includes('leftbrow') || node.name.toLowerCase().includes('browleft')) {
-              leftBrowBone = node;
-            } else if (node.name.toLowerCase().includes('rightbrow') || node.name.toLowerCase().includes('browright')) {
-              rightBrowBone = node;
-            }
+          if (node.isBone && node.name.includes('jaw')) {
+            jawBone = node;
           }
         });
 
-        // Fallback: Create pseudo-bones if not found
-        if (!leftEyeBone) {
-          leftEyeBone = new THREE.Bone();
-          leftEyeBone.position.set(0.2, 0.5, 0);
-          head.add(leftEyeBone);
-        }
-        if (!rightEyeBone) {
-          rightEyeBone = new THREE.Bone();
-          rightEyeBone.position.set(-0.2, 0.5, 0);
-          head.add(rightEyeBone);
-        }
-        if (!leftBrowBone) {
-          leftBrowBone = new THREE.Bone();
-          leftBrowBone.position.set(0.2, 0.7, 0);
-          head.add(leftBrowBone);
-        }
-        if (!rightBrowBone) {
-          rightBrowBone = new THREE.Bone();
-          rightBrowBone.position.set(-0.2, 0.7, 0);
-          head.add(rightBrowBone);
-        }
-
-        // Set solid color material (no texture)
+        // Load skin texture
+        const textureLoader = new THREE.TextureLoader();
+        const skinTexture = textureLoader.load(
+          'https://threejs.org/examples/textures/uv_grid_opengl.jpg'
+        );
         head.traverse((node) => {
           if (node.isMesh) {
             node.material = new THREE.MeshStandardMaterial({
-              color: 0xe0ac69,
+              map: skinTexture,
+              color: 0xe0ac69, // Updated to requested skin color
               roughness: 0.8,
               metalness: 0.2
             });
@@ -176,84 +115,24 @@
         });
       },
       undefined,
-      (error) => console.error('GLTF load error:', error)
+      (error) => console.error('Error loading GLTF:', error)
     );
 
-    // Face detection setup
-    let faceModel = null;
+    // Canvas for image processing
+    const analysisCanvas = document.getElementById('analysisCanvas');
+    const ctx = analysisCanvas.getContext('2d');
+    let prevFrameData = null;
     let smoothedJawRotation = 0;
-    let smoothedLeftEye = 1.0;
-    let smoothedRightEye = 1.0;
-    let smoothedLeftBrow = 0;
-    let smoothedRightBrow = 0;
     let smoothedHeadX = 0;
     let smoothedHeadY = 0;
-    let lastBrowRaiseTime = 0;
     let sidebarOpen = false;
     const sidebar = document.getElementById('sidebar');
-    const sidebarButton = document.getElementById('sidebar-button');
-
-    // Load face model
-    async function loadFaceModel() {
-      try {
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights'),
-          faceapi.nets.faceLandmark68TinyNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights')
-        ]);
-        faceModel = faceapi;
-        console.log("Face-api.js model loaded successfully");
-      } catch (err) {
-        console.error("Face model loading error:", err.message);
-      }
-    }
-
-    // Calculate distance between points
-    function distance(p1, p2) {
-      return Math.sqrt(Math.pow(p1[0] - p2[0], 2) + Math.pow(p1[1] - p2[1], 2));
-    }
-
-    // Sidebar toggle
-    sidebarButton.addEventListener('click', () => {
-      sidebarOpen = !sidebarOpen;
-      if (sidebarOpen) {
-        sidebar.classList.add('open');
-        sidebarButton.textContent = 'Close Sidebar';
-      } else {
-        sidebar.classList.remove('open');
-        sidebarButton.textContent = 'Open Sidebar';
-      }
-    });
-
-    // Color picker
-    const colorOptions = document.querySelectorAll('.color-option');
-    colorOptions.forEach(option => {
-      option.addEventListener('click', () => {
-        colorOptions.forEach(opt => opt.classList.remove('selected'));
-        option.classList.add('selected');
-        const color = parseInt(option.getAttribute('data-color'), 16);
-        if (head) {
-          head.traverse(node => {
-            if (node.isMesh && node.material) {
-              node.material.color.setHex(color);
-            }
-          });
-        }
-      });
-    });
 
     // Animation loop
     function animate() {
       requestAnimationFrame(animate);
       if (jawBone) {
         jawBone.rotation.x = THREE.MathUtils.lerp(jawBone.rotation.x, smoothedJawRotation, 0.2);
-      }
-      if (leftEyeBone && rightEyeBone) {
-        leftEyeBone.scale.y = THREE.MathUtils.lerp(leftEyeBone.scale.y, smoothedLeftEye, 0.2);
-        rightEyeBone.scale.y = THREE.MathUtils.lerp(rightEyeBone.scale.y, smoothedRightEye, 0.2);
-      }
-      if (leftBrowBone && rightBrowBone) {
-        leftBrowBone.position.y = THREE.MathUtils.lerp(leftBrowBone.position.y, 0.7 + smoothedLeftBrow * 0.1, 0.2);
-        rightBrowBone.position.y = THREE.MathUtils.lerp(rightBrowBone.position.y, 0.7 + smoothedRightBrow * 0.1, 0.2);
       }
       if (head) {
         head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, smoothedHeadX, 0.2);
@@ -263,102 +142,96 @@
     }
     animate();
 
-    // Face gesture and head rotation detection
-    async function detectGestures() {
-      if (!faceModel) return;
+    // Gesture detection with skin tone filtering
+    function detectGestures() {
+      ctx.drawImage(video, 0, 0, 320, 240);
+      const frameData = ctx.getImageData(0, 0, 320, 240).data;
 
-      try {
-        const faces = await faceModel.detectAllFaces(video, new faceModel.TinyFaceDetectorOptions())
-          .withFaceLandmarks(true);
-        if (faces.length > 0) {
-          const face = faces[0];
-          const landmarks = face.landmarks;
-
-          // Mouth opening
-          const upperLip = landmarks.getMouth()[6];
-          const lowerLip = landmarks.getMouth()[13];
-          const jawDist = distance([upperLip.x, upperLip.y], [lowerLip.x, lowerLip.y]);
-          smoothedJawRotation = THREE.MathUtils.lerp(
-            smoothedJawRotation,
-            THREE.MathUtils.clamp((jawDist - 10) / 50, 0, 0.4),
-            0.3
-          );
-
-          // Blinking
-          const leftEyeTop = landmarks.getLeftEye()[1];
-          const leftEyeBottom = landmarks.getLeftEye()[4];
-          const rightEyeTop = landmarks.getRightEye()[1];
-          const rightEyeBottom = landmarks.getRightEye()[4];
-          const leftEyeDist = distance([leftEyeTop.x, leftEyeTop.y], [leftEyeBottom.x, leftEyeBottom.y]);
-          const rightEyeDist = distance([rightEyeTop.x, rightEyeTop.y], [rightEyeBottom.x, rightEyeBottom.y]);
-          const blinkThreshold = 5;
-          smoothedLeftEye = THREE.MathUtils.lerp(
-            smoothedLeftEye,
-            leftEyeDist < blinkThreshold ? 0.2 : 1.0,
-            0.3
-          );
-          smoothedRightEye = THREE.MathUtils.lerp(
-            smoothedRightEye,
-            rightEyeDist < blinkThreshold ? 0.2 : 1.0,
-            0.3
-          );
-
-          // Eyebrow raising
-          const leftEyeCenter = landmarks.getLeftEye()[0];
-          const leftBrowCenter = landmarks.getLeftEyeBrow()[2];
-          const rightEyeCenter = landmarks.getRightEye()[0];
-          const rightBrowCenter = landmarks.getRightEyeBrow()[2];
-          const leftBrowDist = distance([leftEyeCenter.x, leftEyeCenter.y], [leftBrowCenter.x, leftBrowCenter.y]);
-          const rightBrowDist = distance([rightEyeCenter.x, rightEyeCenter.y], [rightBrowCenter.x, rightBrowCenter.y]);
-          const browThreshold = 20;
-          const isBrowRaised = leftBrowDist > browThreshold && rightBrowDist > browThreshold;
-          smoothedLeftBrow = THREE.MathUtils.lerp(
-            smoothedLeftBrow,
-            isBrowRaised ? 1.0 : 0.0,
-            0.3
-          );
-          smoothedRightBrow = THREE.MathUtils.lerp(
-            smoothedRightBrow,
-            isBrowRaised ? 1.0 : 0.0,
-            0.3
-          );
-          if (isBrowRaised && performance.now() - lastBrowRaiseTime > 1000) {
-            console.log("Sorry");
-            lastBrowRaiseTime = performance.now();
+      if (prevFrameData) {
+        // Mouth region
+        let mouthDiff = 0;
+        let mouthPixelCount = 0;
+        const mouthX = 140, mouthY = 180, mouthW = 40, mouthH = 40;
+        for (let y = mouthY; y < mouthY + mouthH; y++) {
+          for (let x = mouthX; x < mouthX + mouthW; x++) {
+            const i = (y * 320 + x) * 4;
+            const r = frameData[i], g = frameData[i + 1], b = frameData[i + 2];
+            if (r > 100 && r < 255 && g > 50 && g < 220 && b > 50 && b < 200 && r > g && r > b) {
+              const rDiff = Math.abs(frameData[i] - prevFrameData[i]);
+              const gDiff = Math.abs(frameData[i + 1] - prevFrameData[i + 1]);
+              const bDiff = Math.abs(frameData[i + 2] - prevFrameData[i + 2]);
+              mouthDiff += (rDiff + gDiff + bDiff) / 3;
+              mouthPixelCount++;
+            }
           }
-
-          // Head rotation (yaw and pitch)
-          const leftCheek = landmarks.getContour()[0];
-          const rightCheek = landmarks.getContour()[16];
-          const noseTip = landmarks.getNose()[0];
-          const faceBox = face.detection.box;
-          const faceCenterX = faceBox.x + faceBox.width / 2;
-          const faceCenterY = faceBox.y + faceBox.height / 2;
-          // Yaw: Difference between cheeks and nose position
-          const yaw = (noseTip.x - faceCenterX) / (faceBox.width / 2); // Normalize to [-1, 1]
-          // Pitch: Vertical position of nose relative to face center
-          const pitch = (noseTip.y - faceCenterY) / (faceBox.height / 2); // Normalize to [-1, 1]
-          smoothedHeadX = THREE.MathUtils.lerp(smoothedHeadX, -yaw * 0.5, 0.2); // Negative for correct left/right
-          smoothedHeadY = THREE.MathUtils.lerp(smoothedHeadY, pitch * 0.5, 0.2);
-        } else {
-          smoothedJawRotation = THREE.MathUtils.lerp(smoothedJawRotation, 0, 0.1);
-          smoothedLeftEye = THREE.MathUtils.lerp(smoothedLeftEye, 1.0, 0.1);
-          smoothedRightEye = THREE.MathUtils.lerp(smoothedRightEye, 1.0, 0.1);
-          smoothedLeftBrow = THREE.MathUtils.lerp(smoothedLeftBrow, 0, 0.1);
-          smoothedRightBrow = THREE.MathUtils.lerp(smoothedRightBrow, 0, 0.1);
-          smoothedHeadX = THREE.MathUtils.lerp(smoothedHeadX, 0, 0.1);
-          smoothedHeadY = THREE.MathUtils.lerp(smoothedHeadY, 0, 0.1);
         }
-      } catch (err) {
-        console.error("Face detection error:", err.message);
+        mouthDiff = mouthPixelCount > 0 ? mouthDiff / mouthPixelCount : 0;
+        smoothedJawRotation = THREE.MathUtils.lerp(
+          smoothedJawRotation,
+          THREE.MathUtils.clamp(mouthDiff / 80, 0, 0.4),
+          0.3
+        );
+
+        // Head movement
+        let headDiffX = 0, headDiffY = 0;
+        let headPixelCount = 0;
+        const headW = 120, headH = 120, headX = 100, headY = 60;
+        for (let y = headY; y < headY + headH; y++) {
+          for (let x = headX; x < headX + headW; x++) {
+            const i = (y * 320 + x) * 4;
+            const r = frameData[i], g = frameData[i + 1], b = frameData[i + 2];
+            if (r > 100 && r < 255 && g > 50 && g < 220 && b > 50 && b < 200 && r > g && r > b) {
+              const rDiff = frameData[i] - prevFrameData[i];
+              const gDiff = frameData[i + 1] - prevFrameData[i + 1];
+              const bDiff = frameData[i + 2] - prevFrameData[i + 2];
+              const diff = (rDiff + gDiff + bDiff) / 3;
+              headDiffX += (x - (headX + headW / 2)) * diff;
+              headDiffY += (y - (headY + headH / 2)) * diff;
+              headPixelCount++;
+            }
+          }
+        }
+        headDiffX = headPixelCount > 0 ? headDiffX / headPixelCount : 0;
+        headDiffY = headPixelCount > 0 ? headDiffY / headPixelCount : 0;
+        smoothedHeadX = THREE.MathUtils.lerp(smoothedHeadX, headDiffX / 400, 0.3);
+        smoothedHeadY = THREE.MathUtils.lerp(smoothedHeadY, headDiffY / 400, 0.3);
+
+        // Palm/fist detection
+        let handDiff = 0;
+        let handPixelCount = 0;
+        const handX = 220, handY = 100, handW = 80, handH = 80; // Focus on right side for hand
+        for (let y = handY; y < handY + handH; y++) {
+          for (let x = handX; x < handX + handW; x++) {
+            const i = (y * 320 + x) * 4;
+            const r = frameData[i], g = frameData[i + 1], b = frameData[i + 2];
+            if (r > 100 && r < 255 && g > 50 && g < 220 && b > 50 && b < 200 && r > g && r > b) {
+              const rDiff = Math.abs(frameData[i] - prevFrameData[i]);
+              const gDiff = Math.abs(frameData[i + 1] - prevFrameData[i + 1]);
+              const bDiff = Math.abs(frameData[i + 2] - prevFrameData[i + 2]);
+              handDiff += (rDiff + gDiff + bDiff) / 3;
+              handPixelCount++;
+            }
+          }
+        }
+        handDiff = handPixelCount > 0 ? handDiff / handPixelCount : 0;
+
+        // Toggle sidebar based on hand state
+        const handThreshold = 20; // Adjusted for sensitivity
+        if (handDiff > handThreshold && !sidebarOpen) { // Open palm: high variation
+          sidebar.classList.add('open');
+          sidebarOpen = true;
+        } else if (handDiff < handThreshold && sidebarOpen) { // Fist: low variation
+          sidebar.classList.remove('open');
+          sidebarOpen = false;
+        }
       }
+
+      prevFrameData = frameData.slice();
     }
 
-    // Initialize and start detection
+    // Process frames every 100ms
     video.addEventListener('play', () => {
-      loadFaceModel().then(() => {
-        setInterval(detectGestures, 150);
-      });
+      setInterval(detectGestures, 100);
     });
   </script>
 </body>
