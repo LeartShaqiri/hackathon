@@ -26,7 +26,7 @@
       left: 10px;
       width: 320px;
       height: 240px;
-      opacity: 0.5;
+      opacity: 1.0;
       z-index: 10;
     }
     #analysisCanvas {
@@ -58,7 +58,7 @@
       display: block;
       margin: 10px 0 5px;
     }
-    #sidebar input[type="color"], #sidebar input[type="text"], #sidebar button {
+    #sidebar input[type="color"], #sidebar input[type="text"], #sidebar select, #sidebar button {
       width: 100%;
       height: 30px;
       border: none;
@@ -74,6 +74,14 @@
     #sidebar button:hover {
       background: #4682b4;
     }
+    spline-viewer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
   </style>
 </head>
 <body>
@@ -85,23 +93,40 @@
     <p>Show your palm to open this sidebar.</p>
     <label for="avatarColor">Avatar Color</label>
     <input type="color" id="avatarColor" value="#e0ac69">
+    <label for="avatarSelect">Avatars</label>
+    <select id="avatarSelect">
+      <option value="https://prod.spline.design/UWoeqiir20o49Dah/scene.splinecode">Avatar 1</option>
+      <option value="https://prod.spline.design/LEvjG3OETYd2GsRw/scene.splinecode">Avatar 2</option>
+      <option value="https://prod.spline.design/U9O6K7fXziMEU7Wu/scene.splinecode">Avatar 3</option>
+      <option value="https://prod.spline.design/PBQQBw8bfXDhBo7w/scene.splinecode" data-events-target="global">Avatar 4</option>
+      <option value="https://prod.spline.design/FVZWbQH2B6ndj9UU/scene.splinecode" data-events-target="global">Avatar 5</option>
+      <option value="https://prod.spline.design/fJ2ptJKzT-sDkpfO/scene.splinecode" data-background="rgba(218,81,221,0.2)">Avatar 6</option>
+    </select>
     <label for="aiRequest">AI Request</label>
     <input type="text" id="aiRequest" placeholder="e.g., change body color to red">
     <button id="submitRequest">Submit Request</button>
   </div>
+  <spline-viewer id="splineViewer" url="https://prod.spline.design/UWoeqiir20o49Dah/scene.splinecode"></spline-viewer>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js"></script>
+  <script type="module" src="https://unpkg.com/@splinetool/viewer/build/spline-viewer.js"></script>
 
   <script>
     const video = document.getElementById('video');
     const analysisCanvas = document.getElementById('analysisCanvas');
     const ctx = analysisCanvas.getContext('2d');
+    const sidebar = document.getElementById('sidebar');
+    const avatarColorInput = document.getElementById('avatarColor');
+    const avatarSelect = document.getElementById('avatarSelect');
+    const aiRequestInput = document.getElementById('aiRequest');
+    const submitRequestButton = document.getElementById('submitRequest');
+    let splineViewer = document.getElementById('splineViewer');
 
     // Webcam setup with brightness adjustment
     navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', advanced: [{ brightness: 1 }] }
+      video: { facingMode: 'user', advanced: [{ brightness: 9000 }] }
     }).then(stream => {
       video.srcObject = stream;
     }).catch(e => {
@@ -109,7 +134,7 @@
       console.error(e);
     });
 
-    // Three.js setup
+    // Three.js setup for background elements
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 10;
@@ -178,72 +203,15 @@
       planets.push({ mesh: planet, ...data });
     });
 
-    // Load GLTF model
-    let avatar, leftEye, rightEye, eyeMaterial, avatarMaterial, hair, hat;
-    const loader = new THREE.GLTFLoader();
-    loader.load(
-      'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/LeePerrySmith/LeePerrySmith.glb',
-      gltf => {
-        avatar = gltf.scene;
-        avatar.scale.set(1.5, 1.5, 1.5);
-        scene.add(avatar);
-
-        avatar.traverse(node => {
-          if (node.isMesh) {
-            avatarMaterial = new THREE.MeshStandardMaterial({
-              color: '#e0ac69',
-              roughness: 0.8,
-              metalness: 0.2
-            });
-            node.material = avatarMaterial;
-          }
-        });
-
-        // Add eye meshes
-        const eyeGeometry = new THREE.SphereGeometry(0.08, 8, 8);
-        eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x1e90ff });
-        leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        leftEye.position.set(-0.15, 0.4, 0.8); // Adjusted z to push forward slightly
-        rightEye.position.set(0.15, 0.4, 0.8);
-        avatar.add(leftEye);
-        avatar.add(rightEye);
-
-        // Add pupil meshes
-        const pupilGeometry = new THREE.SphereGeometry(0.04, 8, 8);
-        const pupilMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
-        const leftPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
-        const rightPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
-        leftPupil.position.set(-0.15, 0.4, 0.85); // Adjusted z to align with eyes
-        rightPupil.position.set(0.15, 0.4, 0.85);
-        avatar.add(leftPupil);
-        avatar.add(rightPupil);
-
-        // Add hair (parented to avatar, positioned at head top)
-        const hairGeometry = new THREE.SphereGeometry(0.5, 16, 16);
-        const hairMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-        hair = new THREE.Mesh(hairGeometry, hairMaterial);
-        hair.position.set(0, 1.2, -0.2); // Moved higher (y) and back (z)
-        hair.visible = false;
-        avatar.add(hair);
-
-        // Add hat (parented to avatar, positioned above hair)
-        const hatGeometry = new THREE.SphereGeometry(0.6, 16, 16);
-        const hatMaterial = new THREE.MeshStandardMaterial({ color: 0xa9a9a9 });
-        hat = new THREE.Mesh(hatGeometry, hatMaterial);
-        hat.position.set(0, 1.5, -0.2); // Moved higher (y) and back (z)
-        hat.visible = false;
-        avatar.add(hat);
-      },
-      undefined,
-      err => console.error(err)
-    );
-
     // Resize and zoom
     function handleResizeAndZoom() {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      if (splineViewer) {
+        splineViewer.style.width = `${window.innerWidth}px`;
+        splineViewer.style.height = `${window.innerHeight}px`;
+      }
     }
     window.addEventListener('resize', handleResizeAndZoom);
     renderer.domElement.addEventListener('wheel', (event) => {
@@ -263,14 +231,26 @@
       handleResizeAndZoom();
     });
 
-    // Sidebar controls
-    const sidebar = document.getElementById('sidebar');
-    const avatarColorInput = document.getElementById('avatarColor');
-    const aiRequestInput = document.getElementById('aiRequest');
-    const submitRequestButton = document.getElementById('submitRequest');
-
+    // Sidebar controls and avatar selection
     avatarColorInput.addEventListener('input', () => {
-      if (avatarMaterial) avatarMaterial.color.set(avatarColorInput.value);
+      console.log(`Color change to ${avatarColorInput.value} requested, not supported by Spline yet`);
+    });
+
+    avatarSelect.addEventListener('change', () => {
+      const selectedUrl = avatarSelect.value;
+      const eventsTarget = avatarSelect.options[avatarSelect.selectedIndex].dataset.eventsTarget;
+      const background = avatarSelect.options[avatarSelect.selectedIndex].dataset.background;
+
+      if (splineViewer) {
+        splineViewer.remove();
+      }
+      splineViewer = document.createElement('spline-viewer');
+      splineViewer.id = 'splineViewer';
+      splineViewer.setAttribute('url', selectedUrl);
+      if (eventsTarget) splineViewer.setAttribute('events-target', eventsTarget);
+      if (background) splineViewer.setAttribute('background', background);
+      splineViewer.style.transform = `rotateY(${smoothedHeadX * 0.8}rad) rotateX(${smoothedHeadY * 0.8}rad) scale(1)`;
+      document.body.appendChild(splineViewer);
     });
 
     // AI request handler
@@ -278,37 +258,23 @@
       const request = aiRequestInput.value.toLowerCase().trim();
       if (!request) return;
 
-      // Parse request
       if (request.includes('change') && request.includes('color')) {
         const colorMatch = request.match(/to\s+(\w+)/);
         if (colorMatch && colorMatch[1]) {
-          const color = colorMatch[1];
-          if (avatarMaterial && !request.includes('eye')) {
-            avatarMaterial.color.set(color);
-            avatarColorInput.value = avatarMaterial.color.getHexString();
-          }
-          if (eyeMaterial && request.includes('eye')) {
-            eyeMaterial.color.set(color);
-          }
+          console.log(`Color change to ${colorMatch[1]} requested, not supported by Spline yet`);
         }
-      } else if (request.includes('add') && request.includes('hair')) {
-        if (hair) hair.visible = true;
-      } else if (request.includes('remove') && request.includes('hair')) {
-        if (hair) hair.visible = false;
-      } else if (request.includes('add') && request.includes('hat')) {
-        if (hat) hat.visible = true;
-      } else if (request.includes('remove') && request.includes('hat')) {
-        if (hat) hat.visible = false;
       } else if (request.includes('change') && request.includes('size')) {
         const sizeMatch = request.match(/to\s+(\d+(\.\d+)?)/);
         if (sizeMatch && sizeMatch[1]) {
           const size = parseFloat(sizeMatch[1]);
-          if (avatar && size > 0) {
-            avatar.scale.set(size, size, size);
+          if (splineViewer) {
+            splineViewer.style.transform = `rotateY(${smoothedHeadX * 0.8}rad) rotateX(${smoothedHeadY * 0.8}rad) scale(${size})`;
           }
         }
+      } else if (request.includes('add') || request.includes('remove')) {
+        console.log(`${request} not supported by Spline model (e.g., hair, hat)`);
       } else {
-        alert('Request not understood. Try: "change body color to red", "change eye color to blue", "add hair", "remove hair", "add hat", "remove hat", "change size to 2"');
+        alert('Request not understood or not supported. Try: "change size to 2"');
       }
       aiRequestInput.value = ''; // Clear input
     });
@@ -329,10 +295,28 @@
       }
     });
 
+    // Hand detection setup
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
+    });
+    hands.setOptions({
+      maxNumHands: 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+    hands.onResults(results => {
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        updateHandRotation(results.multiHandLandmarks[0]);
+      } else {
+        isTwoFingers = false;
+      }
+    });
+
     let processTimeout;
     async function processVideo() {
       if (video.readyState >= 2) {
         await faceMesh.send({ image: video });
+        await hands.send({ image: video });
       }
       processTimeout = setTimeout(processVideo, 200);
     }
@@ -340,6 +324,11 @@
 
     let smoothedHeadX = 0;
     let smoothedHeadY = 0;
+    let isTwoFingers = false;
+    let lastHandX = 0;
+    let lastHandY = 0;
+    let twoFingerRotationX = 0;
+    let twoFingerRotationY = 0;
 
     function updateHeadRotation(landmarks) {
       const nose = landmarks[1];
@@ -353,9 +342,43 @@
       smoothedHeadX = THREE.MathUtils.lerp(smoothedHeadX, yaw, 0.5);
       smoothedHeadY = THREE.MathUtils.lerp(smoothedHeadY, pitch, 0.5);
 
-      if (avatar) {
-        avatar.rotation.y = THREE.MathUtils.clamp(smoothedHeadX * 0.8, -0.5, 0.5);
-        avatar.rotation.x = THREE.MathUtils.clamp(smoothedHeadY * 0.8, -0.5, 0.5);
+      updateModelTransform();
+    }
+
+    function updateHandRotation(landmarks) {
+      const indexTip = landmarks[8]; // Index finger tip
+      const middleTip = landmarks[12]; // Middle finger tip
+      const ringTip = landmarks[16]; // Ring finger tip (to check extension)
+
+      // Check if index and middle fingers are extended (higher than ring finger)
+      if (indexTip.y < ringTip.y - 0.1 && middleTip.y < ringTip.y - 0.1) {
+        isTwoFingers = true;
+        const handX = (indexTip.x + middleTip.x) / 2;
+        const handY = (indexTip.y + middleTip.y) / 2;
+
+        if (lastHandX !== 0 && lastHandY !== 0) {
+          const deltaX = handX - lastHandX;
+          const deltaY = handY - lastHandY;
+          twoFingerRotationY += deltaX * 5; // Horizontal movement affects Y rotation
+          twoFingerRotationX += deltaY * 5; // Vertical movement affects X rotation
+        }
+        lastHandX = handX;
+        lastHandY = handY;
+      } else {
+        isTwoFingers = false;
+        lastHandX = 0;
+        lastHandY = 0;
+      }
+
+      updateModelTransform();
+    }
+
+    function updateModelTransform() {
+      if (splineViewer) {
+        const currentScale = splineViewer.style.transform.match(/scale\(([^)]+)\)/)?.[1] || '1';
+        const rotationY = isTwoFingers ? twoFingerRotationY : smoothedHeadX * 0.8;
+        const rotationX = isTwoFingers ? twoFingerRotationX : smoothedHeadY * 0.8;
+        splineViewer.style.transform = `rotateY(${rotationY}rad) rotateX(${rotationX}rad) scale(${currentScale})`;
       }
     }
 
@@ -391,7 +414,7 @@
       }
     }
 
-    // Blinking animation
+    // Blinking animation (simulated, not applicable to Spline)
     const clock = new THREE.Clock();
     let lastBlinkTime = 0;
     let blinkState = 'open';
@@ -402,35 +425,7 @@
     let nextBlinkInterval = minBlinkInterval + Math.random() * (maxBlinkInterval - minBlinkInterval);
 
     function updateBlink(delta) {
-      if (!eyeMaterial) return;
-      lastBlinkTime += delta;
-      if (blinkState === 'open' && lastBlinkTime >= nextBlinkInterval) {
-        blinkState = 'closing';
-        blinkTimer = 0;
-      }
-      if (blinkState === 'closing') {
-        blinkTimer += delta;
-        eyeMaterial.color.set(0xffffff);
-        if (blinkTimer >= blinkDuration / 2) {
-          blinkState = 'closed';
-          blinkTimer = 0;
-        }
-      } else if (blinkState === 'closed') {
-        blinkTimer += delta;
-        eyeMaterial.color.set(0xffffff);
-        if (blinkTimer >= blinkDuration / 4) {
-          blinkState = 'opening';
-          blinkTimer = 0;
-        }
-      } else if (blinkState === 'opening') {
-        blinkTimer += delta;
-        eyeMaterial.color.set(eyeMaterial.color.getHex() || 0x1e90ff);
-        if (blinkTimer >= blinkDuration / 2) {
-          blinkState = 'open';
-          lastBlinkTime = 0;
-          nextBlinkInterval = minBlinkInterval + Math.random() * (maxBlinkInterval - minBlinkInterval);
-        }
-      }
+      console.log('Blinking animation requested, not supported by Spline yet');
     }
 
     // Planet animation
