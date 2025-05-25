@@ -10,6 +10,12 @@
       50% { text-shadow: 0 0 10px #1e90ff, 0 0 20px #1e90ff; }
       100% { text-shadow: 0 0 5px #1e90ff, 0 0 10px #1e90ff; }
     }
+    @keyframes fadeInOut {
+      0% { opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { opacity: 0; }
+    }
     body {
       margin: 0;
       overflow: hidden;
@@ -80,17 +86,58 @@
       color: #1e90ff;
       animation: glow 2.5s infinite;
     }
-    #sidebar input[type="color"] {
+    #gestureHelp {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 400px;
+      padding: 20px;
+      background: rgba(26, 26, 26, 0.8);
+      border: 2px solid #1e90ff;
+      box-shadow: 0 0 20px rgba(30, 144, 255, 0.4);
+      color: #fff;
+      font-size: 14px;
+      text-align: center;
+      z-index: 30;
+      animation: fadeInOut 3s forwards;
+      border-radius: 10px;
+    }
+    #gestureHelp p {
+      margin: 10px 0;
+      line-height: 1.4;
+    }
+    #gestureHelp .emoji {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    #gestureHelp ul {
+      list-style: none;
+      padding: 0;
+      text-align: left;
+      margin: 0;
+    }
+    #gestureHelp li {
+      margin: 5px 0;
+    }
+    #sidebar input[type="range"] {
       width: 100%;
       height: 40px;
-      border: 2px solid #1e90ff;
       background: #333;
       cursor: pointer;
       border-radius: 5px;
-      transition: border-color 0.2s;
+      transition: background 0.2s;
     }
-    #sidebar input[type="color"]:hover {
-      border-color: #4682b4;
+    #sidebar input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: #1e90ff;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    #sidebar input[type="range"]::-webkit-slider-thumb:hover {
+      background: #4682b4;
     }
     #sidebar select {
       width: 100%;
@@ -154,12 +201,23 @@
 <body>
   <video id="video" autoplay playsinline muted></video>
   <canvas id="analysisCanvas" width="320" height="240"></canvas>
+  <div id="gestureHelp">
+    <div class="emoji">🗣️</div>
+    <p>You can use these commands to change avatars and hand gestures to zoom in/out.</p>
+    <ul>
+      <li>🖐️ Palm: Show to open sidebar</li>
+      <li>🗣️ Voice: Say “1” to “6” to select avatars</li>
+      <li>👌 Two fingers: Move left/right to tilt</li>
+      <li>🖐️🖐️ Open hands: Spread hands apart to zoom in/out</li>
+      <li>😊 Head tilt: Move head to rotate model</li>
+    </ul>
+  </div>
   <div id="sidebar">
     <h2>Puppeteer Control</h2>
     <p>Show your palm to open this panel or say a number (1-6) to select an avatar.</p>
     <div class="section">
-      <label for="avatarColor">Avatar Color</label>
-      <input type="color" id="avatarColor" value="#e0ac69">
+      <label for="galaxyDensity">Galaxy Density</label>
+      <input type="range" id="galaxyDensity" min="0" max="100" value="50">
     </div>
     <div class="section">
       <label for="avatarSelect">Select Avatar</label>
@@ -189,11 +247,17 @@
     const analysisCanvas = document.getElementById('analysisCanvas');
     const ctx = analysisCanvas.getContext('2d');
     const sidebar = document.getElementById('sidebar');
-    const avatarColorInput = document.getElementById('avatarColor');
+    const gestureHelp = document.getElementById('gestureHelp');
+    const galaxyDensityInput = document.getElementById('galaxyDensity');
     const avatarSelect = document.getElementById('avatarSelect');
     const aiRequestInput = document.getElementById('aiRequest');
     const submitRequestButton = document.getElementById('submitRequest');
     let splineViewer = document.getElementById('splineViewer');
+
+    // Hide gesture help after 3 seconds
+    setTimeout(() => {
+      gestureHelp.style.display = 'none';
+    }, 3000);
 
     // Get URL parameter for initial model
     const urlParams = new URLSearchParams(window.location.search);
@@ -254,23 +318,97 @@
     const galaxy = new THREE.Mesh(galaxyGeometry, galaxyMaterial);
     scene.add(galaxy);
 
-    // Star field
-    const starCount = 300;
-    const starGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-    const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.3 });
-    const starPositions = new Float32Array(starCount * 3);
-    for (let i = 0; i < starCount * 3; i += 3) {
-      starPositions[i] = (Math.random() - 0.5) * 150;
-      starPositions[i + 1] = (Math.random() - 0.5) * 150;
-      starPositions[i + 2] = (Math.random() - 0.5) * 150;
-    }
-    const starBuffer = new THREE.BufferGeometry();
-    starBuffer.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-    const stars = new THREE.Points(starBuffer, starMaterial);
-    scene.add(stars);
+    // Galaxy density control
+    let stars, dynamicPlanets = [], clouds = [];
+    const planetTextures = [
+      'https://threejs.org/examples/textures/planets/mars_2k.jpg',
+      'https://threejs.org/examples/textures/planets/venus_surface_2k.jpg',
+      'https://threejs.org/examples/textures/planets/uranus_2k.jpg'
+    ];
 
-    // Large planets
-    const planets = [];
+    function updateGalaxyDensity(value) {
+      // Remove existing stars, planets, clouds
+      if (stars) scene.remove(stars);
+      dynamicPlanets.forEach(p => scene.remove(p.mesh));
+      clouds.forEach(c => scene.remove(c));
+      dynamicPlanets = [];
+      clouds = [];
+
+      // Stars
+      const starCount = 100 + (value / 100) * 900; // 100 to 1000
+      const starGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+      const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.3 });
+      const starPositions = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount * 3; i += 3) {
+        starPositions[i] = (Math.random() - 0.5) * 150;
+        starPositions[i + 1] = (Math.random() - 0.5) * 150;
+        starPositions[i + 2] = (Math.random() - 0.5) * 150;
+      }
+      const starBuffer = new THREE.BufferGeometry();
+      starBuffer.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+      stars = new THREE.Points(starBuffer, starMaterial);
+      scene.add(stars);
+
+      // Dynamic planets
+      const planetCount = 2 + Math.floor((value / 100) * 6); // 2 to 8
+      for (let i = 0; i < planetCount - 2; i++) {
+        const textureUrl = planetTextures[i % planetTextures.length];
+        const texture = new THREE.TextureLoader().load(textureUrl, undefined, undefined, () => console.error(`Error loading texture: ${textureUrl}`));
+        const radius = 2 + Math.random() * 2;
+        const geometry = new THREE.SphereGeometry(radius, 16, 16);
+        const material = new THREE.MeshStandardMaterial({
+          map: texture,
+          emissive: 0x111111,
+          emissiveIntensity: 0.2
+        });
+        const planet = new THREE.Mesh(geometry, material);
+        const orbitRadius = 20 + Math.random() * 30;
+        const z = -30 - Math.random() * 30;
+        planet.position.z = z;
+        scene.add(planet);
+        dynamicPlanets.push({ mesh: planet, orbitRadius, speed: 0.1 + Math.random() * 0.2, z });
+      }
+
+      // Clouds (nebula-like)
+      const cloudCount = Math.floor((value / 100) * 5); // 0 to 5
+      for (let i = 0; i < cloudCount; i++) {
+        const cloudGeometry = new THREE.SphereGeometry(10, 16, 16);
+        const vertices = cloudGeometry.attributes.position.array;
+        for (let j = 0; j < vertices.length; j += 3) {
+          const offset = (Math.random() - 0.5) * 2;
+          vertices[j] += offset;
+          vertices[j + 1] += offset;
+          vertices[j + 2] += offset;
+        }
+        cloudGeometry.attributes.position.needsUpdate = true;
+        const cloudMaterial = new THREE.MeshBasicMaterial({
+          color: 0x8888ff,
+          transparent: true,
+          opacity: 0.3,
+          side: THREE.DoubleSide
+        });
+        const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial);
+        cloud.position.set(
+          (Math.random() - 0.5) * 50,
+          (Math.random() - 0.5) * 50,
+          -20 - Math.random() * 20
+        );
+        scene.add(cloud);
+        clouds.push(cloud);
+      }
+
+      console.log(`Galaxy density updated: ${starCount} stars, ${planetCount} planets, ${cloudCount} clouds`);
+    }
+
+    galaxyDensityInput.addEventListener('input', () => {
+      updateGalaxyDensity(parseInt(galaxyDensityInput.value));
+    });
+
+    // Initialize with default density
+    updateGalaxyDensity(50);
+
+    // Static planets
+    const staticPlanets = [];
     const planetData = [
       { radius: 6, orbitRadius: 30, speed: 0.3, z: -40, texture: 'https://threejs.org/examples/textures/planets/jupiter_2k.jpg' },
       { radius: 5, orbitRadius: 40, speed: 0.2, z: -50, texture: 'https://threejs.org/examples/textures/planets/neptune_2k.jpg' }
@@ -286,7 +424,7 @@
       const planet = new THREE.Mesh(geometry, material);
       planet.position.z = data.z;
       scene.add(planet);
-      planets.push({ mesh: planet, ...data });
+      staticPlanets.push({ mesh: planet, ...data });
     });
 
     // Resize handler
@@ -301,11 +439,7 @@
     }
     window.addEventListener('resize', handleResize);
 
-    // Sidebar controls and avatar selection
-    avatarColorInput.addEventListener('input', () => {
-      console.log(`Color change to ${avatarColorInput.value} requested, not supported by Spline yet`);
-    });
-
+    // Avatar selection
     function updateAvatarSelection(selectedUrl, index) {
       if (splineViewer) {
         splineViewer.remove();
@@ -428,8 +562,9 @@
         console.log(`Detected ${results.multiHandLandmarks.length} hands`);
         updateHandRotation(results.multiHandLandmarks);
       } else {
+        isTwoHandOpen = false;
         isTwoFingers = false;
-        lastPinchDist = 0;
+        lastHandDist = 0;
         lastHandX = 0;
         lastHandY = 0;
         console.log('No hands detected');
@@ -450,9 +585,10 @@
     let smoothedHeadY = 0;
     let smoothedScale = 1.0;
     let isTwoFingers = false;
+    let isTwoHandOpen = false;
     let lastHandX = 0;
     let lastHandY = 0;
-    let lastPinchDist = 0;
+    let lastHandDist = 0;
     let twoFingerRotationX = 0;
 
     function updateHeadRotation(landmarks) {
@@ -464,37 +600,63 @@
       const yaw = (eyeCenterX - 0.5) * -2;
       const pitch = (nose.y - 0.5) * 2;
 
-      smoothedHeadX = THREE.MathUtils.lerp(smoothedHeadX, yaw, 0.4);
-      smoothedHeadY = THREE.MathUtils.lerp(smoothedHeadY, pitch, 0.4);
+      smoothedHeadX = THREE.MathUtils.lerp(smoothedHeadX, yaw, 0.25);
+      smoothedHeadY = THREE.MathUtils.lerp(smoothedHeadY, pitch, 0.25);
 
       updateModelTransform();
     }
 
+    function isHandOpen(handLandmarks) {
+      const thumbTip = handLandmarks[4];
+      const pinkyTip = handLandmarks[20];
+      const dist = Math.sqrt(
+        Math.pow((thumbTip.x - pinkyTip.x) * 320, 2) +
+        Math.pow((thumbTip.y - pinkyTip.y) * 240, 2)
+      );
+      return dist > 50; // Threshold for open hand (adjustable)
+    }
+
+    function getHandCentroid(handLandmarks) {
+      let sumX = 0, sumY = 0;
+      for (let i = 0; i < 21; i++) {
+        sumX += handLandmarks[i].x;
+        sumY += handLandmarks[i].y;
+      }
+      return { x: sumX / 21, y: sumY / 21 };
+    }
+
     function updateHandRotation(landmarks) {
-      // Pinch-to-zoom with two hands
+      // Two-hand open gesture for zoom
       if (landmarks.length === 2) {
         const leftHand = landmarks[0];
         const rightHand = landmarks[1];
-        const leftIndexTip = leftHand[8];
-        const rightIndexTip = rightHand[8];
-        const pinchDist = Math.sqrt(
-          Math.pow((leftIndexTip.x - rightIndexTip.x) * 320, 2) +
-          Math.pow((leftIndexTip.y - rightIndexTip.y) * 240, 2)
-        );
-        console.log(`Pinch distance: ${pinchDist.toFixed(2)}`);
-        if (lastPinchDist !== 0) {
-          const delta = pinchDist - lastPinchDist;
-          smoothedScale += delta * 0.005;
-          smoothedScale = THREE.MathUtils.clamp(smoothedScale, 0.5, 3.0);
-          console.log(`Scale updated to: ${smoothedScale.toFixed(2)}`);
+        if (isHandOpen(leftHand) && isHandOpen(rightHand)) {
+          isTwoHandOpen = true;
+          const leftCentroid = getHandCentroid(leftHand);
+          const rightCentroid = getHandCentroid(rightHand);
+          const handDist = Math.sqrt(
+            Math.pow((leftCentroid.x - rightCentroid.x) * 320, 2) +
+            Math.pow((leftCentroid.y - rightCentroid.y) * 240, 2)
+          );
+          console.log(`Hand distance: ${handDist.toFixed(2)}`);
+          if (lastHandDist !== 0) {
+            const delta = handDist - lastHandDist;
+            smoothedScale += delta * 0.005;
+            smoothedScale = THREE.MathUtils.clamp(smoothedScale, 0.5, 3.0);
+            console.log(`Scale updated to: ${smoothedScale.toFixed(2)}`);
+          }
+          lastHandDist = handDist;
+        } else {
+          isTwoHandOpen = false;
+          lastHandDist = 0;
         }
-        lastPinchDist = pinchDist;
       } else {
-        lastPinchDist = 0;
+        isTwoHandOpen = false;
+        lastHandDist = 0;
       }
 
       // Two-finger tilt with one hand (X-axis rotation)
-      if (landmarks.length > 0) {
+      if (landmarks.length > 0 && !isTwoHandOpen) {
         const hand = landmarks[0];
         const indexTip = hand[8];
         const middleTip = hand[12];
@@ -570,7 +732,13 @@
 
     // Planet animation
     function updatePlanets(time) {
-      planets.forEach(planet => {
+      staticPlanets.forEach(planet => {
+        const angle = time * planet.speed;
+        planet.mesh.position.x = planet.orbitRadius * Math.cos(angle);
+        planet.mesh.position.y = planet.orbitRadius * Math.sin(angle);
+        planet.mesh.position.z = planet.z + Math.sin(angle) * 2;
+      });
+      dynamicPlanets.forEach(planet => {
         const angle = time * planet.speed;
         planet.mesh.position.x = planet.orbitRadius * Math.cos(angle);
         planet.mesh.position.y = planet.orbitRadius * Math.sin(angle);
