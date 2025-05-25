@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Puppeteer: Manipulating Human Avatar Actions with Intuitive Hand Gestures</title>
   <style>
+    @keyframes glow {
+      0% { text-shadow: 0 0 5px #1e90ff, 0 0 10px #1e90ff; }
+      50% { text-shadow: 0 0 10px #1e90ff, 0 0 20px #1e90ff; }
+      100% { text-shadow: 0 0 5px #1e90ff, 0 0 10px #1e90ff; }
+    }
     body {
       margin: 0;
       overflow: hidden;
@@ -14,6 +19,7 @@
       align-items: center;
       height: 100vh;
       user-select: none;
+      font-family: 'Orbitron', Arial, sans-serif;
     }
     canvas {
       display: block;
@@ -35,14 +41,14 @@
     #sidebar {
       position: fixed;
       top: 0;
-      right: -260px;
-      width: 260px;
+      right: -320px;
+      width: 320px;
       height: 100%;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(6px);
+      background: #1a1a2a;
+      border-left: 3px solid #1e90ff;
+      box-shadow: -5px 0 20px rgba(30, 144, 255, 0.4);
       color: #fff;
-      padding: 20px;
-      font-family: Arial, sans-serif;
+      padding: 25px;
       box-sizing: border-box;
       transition: right 0.3s ease;
       z-index: 20;
@@ -51,28 +57,88 @@
       right: 0;
     }
     #sidebar h2 {
-      margin-top: 0;
+      margin: 0 0 25px;
+      font-size: 26px;
+      text-align: center;
+      animation: glow 2s infinite;
+    }
+    #sidebar .section {
       margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px dashed rgba(30, 144, 255, 0.3);
+    }
+    #sidebar p {
+      font-size: 14px;
+      line-height: 1.5;
+      margin: 0 0 15px;
+      color: #ccc;
     }
     #sidebar label {
       display: block;
       margin: 10px 0 5px;
+      font-size: 16px;
+      color: #1e90ff;
+      animation: glow 2.5s infinite;
     }
-    #sidebar input[type="color"], #sidebar input[type="text"], #sidebar select, #sidebar button {
+    #sidebar input[type="color"] {
       width: 100%;
-      height: 30px;
-      border: none;
+      height: 40px;
+      border: 2px solid #1e90ff;
+      background: #333;
       cursor: pointer;
-      background: rgba(255, 255, 255, 0.2);
+      border-radius: 5px;
+      transition: border-color 0.2s;
+    }
+    #sidebar input[type="color"]:hover {
+      border-color: #4682b4;
+    }
+    #sidebar select {
+      width: 100%;
+      height: 40px;
+      border: 2px solid #1e90ff;
+      background: #333;
       color: #fff;
-      margin: 5px 0;
+      cursor: pointer;
+      border-radius: 5px;
+      padding: 5px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    #sidebar select option {
+      background: #333;
+      color: #fff;
+    }
+    #sidebar select:hover {
+      border-color: #4682b4;
+    }
+    #sidebar input[type="text"] {
+      width: 100%;
+      height: 40px;
+      border: 2px solid #1e90ff;
+      background: #333;
+      color: #fff;
+      padding: 5px;
+      border-radius: 5px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    #sidebar input[type="text"]:hover {
+      border-color: #4682b4;
     }
     #sidebar button {
+      width: 100%;
+      height: 40px;
       background: #1e90ff;
+      border: none;
+      color: #fff;
+      cursor: pointer;
       border-radius: 5px;
+      font-size: 16px;
+      transition: background 0.2s, transform 0.2s;
     }
     #sidebar button:hover {
       background: #4682b4;
+      transform: scale(1.05);
     }
     spline-viewer {
       position: absolute;
@@ -83,31 +149,34 @@
       z-index: 1;
     }
   </style>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <video id="video" autoplay playsinline muted></video>
   <canvas id="analysisCanvas" width="320" height="240"></canvas>
   <div id="sidebar">
     <h2>Puppeteer Control</h2>
-    <p>Show your palm to open this sidebar or say a number (1-6) to select an avatar.</p>
-    <label for="avatarColor">Avatar Color</label>
-    <input type="color" id="avatarColor" value="#e0ac69">
-    <label for="avatarSelect">Avatars</label>
-
-
-   <select id="avatarSelect">
-  <option value="https://prod.spline.design/UWoeqiir20o49Dah/scene.splinecode">Avatar 1</option>
-  <option value="https://prod.spline.design/j2gnCi7Shp0mBQ9d/scene.splinecode">Avatar 2</option>
-  <option value="https://prod.spline.design/U9O6K7fXziMEU7Wu/scene.splinecode">Avatar 3</option>
-  <option value="https://prod.spline.design/PBQQBw8bfXDhBo7w/scene.splinecode" data-events-target="global">Avatar 4</option>
-  <option value="https://prod.spline.design/FVZWbQH2B6ndj9UU/scene.splinecode" data-events-target="global">Avatar 5</option>
-  <option value="https://prod.spline.design/fJ2ptJKzT-sDkpfO/scene.splinecode" data-background="rgba(218,81,221,0.2)">Avatar 6</option>
-</select>
-
-
-    <label for="aiRequest">AI Request</label>
-    <input type="text" id="aiRequest" placeholder="e.g., change size to 2">
-    <button id="submitRequest">Submit Request</button>
+    <p>Show your palm to open this panel or say a number (1-6) to select an avatar.</p>
+    <div class="section">
+      <label for="avatarColor">Avatar Color</label>
+      <input type="color" id="avatarColor" value="#e0ac69">
+    </div>
+    <div class="section">
+      <label for="avatarSelect">Select Avatar</label>
+      <select id="avatarSelect">
+        <option value="https://prod.spline.design/UWoeqiir20o49Dah/scene.splinecode">Ice Cream (Avatar 1)</option>
+        <option value="https://prod.spline.design/j2gnCi7Shp0mBQ9d/scene.splinecode">Blue Block (Avatar 2)</option>
+        <option value="https://prod.spline.design/U9O6K7fXziMEU7Wu/scene.splinecode">Rabbit & Bird (Avatar 3)</option>
+        <option value="https://prod.spline.design/PBQQBw8bfXDhBo7w/scene.splinecode" data-events-target="global">Ball Tracker (Avatar 4)</option>
+        <option value="https://prod.spline.design/FVZWbQH2B6ndj9UU/scene.splinecode" data-events-target="global">Big Fat Rabbit (Avatar 5)</option>
+        <option value="https://prod.spline.design/fJ2ptJKzT-sDkpfO/scene.splinecode" data-background="rgba(218,81,221,0.2)">Blocky Cool Block (Avatar 6)</option>
+      </select>
+    </div>
+    <div class="section">
+      <label for="aiRequest">AI Customization</label>
+      <input type="text" id="aiRequest" placeholder="e.g., change size to 2">
+      <button id="submitRequest">Submit Request</button>
+    </div>
   </div>
   <spline-viewer id="splineViewer" url=""></spline-viewer>
 
