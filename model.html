@@ -106,7 +106,7 @@
     <input type="text" id="aiRequest" placeholder="e.g., change body color to red">
     <button id="submitRequest">Submit Request</button>
   </div>
-  <spline-viewer id="splineViewer" url="https://prod.spline.design/UWoeqiir20o49Dah/scene.splinecode"></spline-viewer>
+  <spline-viewer id="splineViewer" url=""></spline-viewer>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js"></script>
@@ -123,6 +123,21 @@
     const aiRequestInput = document.getElementById('aiRequest');
     const submitRequestButton = document.getElementById('submitRequest');
     let splineViewer = document.getElementById('splineViewer');
+
+    // Get URL parameter for initial model
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialUrl = urlParams.get('url');
+    if (initialUrl) {
+      splineViewer.setAttribute('url', initialUrl);
+      // Set avatarSelect to match the initial model if it exists
+      const options = avatarSelect.options;
+      for (let i = 0; i < options.length; i++) {
+        if (options[i].value === initialUrl) {
+          avatarSelect.selectedIndex = i;
+          break;
+        }
+      }
+    }
 
     // Webcam setup with brightness adjustment
     navigator.mediaDevices.getUserMedia({

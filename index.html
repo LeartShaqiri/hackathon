@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <a href="model.html"></a>
   <title>Welcome to AI 3D Model Creator</title>
   <style>
     body {
@@ -50,6 +49,32 @@
     #popup-content button:hover {
       background: #4682b4;
     }
+    #model-grid {
+      display: none;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      padding: 20px;
+      max-width: 1200px;
+    }
+    .model-thumbnail {
+      width: 200px;
+      height: 200px;
+      background: #222;
+      border: 2px solid #1e90ff;
+      border-radius: 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 18px;
+      color: #fff;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .model-thumbnail:hover {
+      transform: scale(1.05);
+      background: #333;
+    }
     #create-button {
       padding: 15px 30px;
       background: #1e90ff;
@@ -59,6 +84,9 @@
       cursor: pointer;
       border-radius: 5px;
       display: none;
+      position: absolute;
+      top: 20px;
+      left: 20px;
     }
     #create-button:hover {
       background: #4682b4;
@@ -74,15 +102,25 @@
     </div>
   </div>
   <button id="create-button" onclick="window.location.href='model.html'">Create Your 3D Model</button>
+  <div id="model-grid">
+    <div class="model-thumbnail" onclick="window.location.href='model.html?url=https://prod.spline.design/UWoeqiir20o49Dah/scene.splinecode'">Model 1</div>
+    <div class="model-thumbnail" onclick="window.location.href='model.html?url=https://prod.spline.design/LEvjG3OETYd2GsRw/scene.splinecode'">Model 2</div>
+    <div class="model-thumbnail" onclick="window.location.href='model.html?url=https://prod.spline.design/U9O6K7fXziMEU7Wu/scene.splinecode'">Model 3</div>
+    <div class="model-thumbnail" onclick="window.location.href='model.html?url=https://prod.spline.design/PBQQBw8bfXDhBo7w/scene.splinecode'">Model 4</div>
+    <div class="model-thumbnail" onclick="window.location.href='model.html?url=https://prod.spline.design/FVZWbQH2B6ndj9UU/scene.splinecode'">Model 5</div>
+    <div class="model-thumbnail" onclick="window.location.href='model.html?url=https://prod.spline.design/fJ2ptJKzT-sDkpfO/scene.splinecode'">Model 6</div>
+  </div>
 
   <script>
     const popup = document.getElementById('popup');
     const okButton = document.getElementById('ok-button');
     const createButton = document.getElementById('create-button');
+    const modelGrid = document.getElementById('model-grid');
 
     okButton.addEventListener('click', () => {
       popup.style.display = 'none';
       createButton.style.display = 'block';
+      modelGrid.style.display = 'flex';
     });
   </script>
 </body>
