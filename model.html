@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Customize Your 3D Model</title>
+  <title>Puppeteer: Manipulating Human Avatar Actions with Intuitive Hand Gestures</title>
   <style>
     body {
       margin: 0;
@@ -87,10 +87,9 @@
 <body>
   <video id="video" autoplay playsinline muted></video>
   <canvas id="analysisCanvas" width="320" height="240"></canvas>
-
   <div id="sidebar">
-    <h2>Control Panel</h2>
-    <p>Show your palm to open this sidebar.</p>
+    <h2>Puppeteer Control</h2>
+    <p>Show your palm to open this sidebar or say a number (1-6) to select an avatar.</p>
     <label for="avatarColor">Avatar Color</label>
     <input type="color" id="avatarColor" value="#e0ac69">
     <label for="avatarSelect">Avatars</label>
@@ -103,7 +102,7 @@
       <option value="https://prod.spline.design/fJ2ptJKzT-sDkpfO/scene.splinecode" data-background="rgba(218,81,221,0.2)">Avatar 6</option>
     </select>
     <label for="aiRequest">AI Request</label>
-    <input type="text" id="aiRequest" placeholder="e.g., change body color to red">
+    <input type="text" id="aiRequest" placeholder="e.g., change size to 2">
     <button id="submitRequest">Submit Request</button>
   </div>
   <spline-viewer id="splineViewer" url=""></spline-viewer>
@@ -112,7 +111,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js"></script>
   <script type="module" src="https://unpkg.com/@splinetool/viewer/build/spline-viewer.js"></script>
-
   <script>
     const video = document.getElementById('video');
     const analysisCanvas = document.getElementById('analysisCanvas');
@@ -129,7 +127,6 @@
     const initialUrl = urlParams.get('url');
     if (initialUrl) {
       splineViewer.setAttribute('url', initialUrl);
-      // Set avatarSelect to match the initial model if it exists
       const options = avatarSelect.options;
       for (let i = 0; i < options.length; i++) {
         if (options[i].value === initialUrl) {
@@ -139,13 +136,14 @@
       }
     }
 
-    // Webcam setup with brightness adjustment
+    // Webcam setup
     navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', advanced: [{ brightness: 9000 }] }
+      video: { facingMode: 'user', width: 640, height: 480 },
+      audio: true // Enable microphone for voice recognition
     }).then(stream => {
       video.srcObject = stream;
     }).catch(e => {
-      alert('Cannot access webcam');
+      alert('Cannot access webcam or microphone');
       console.error(e);
     });
 
@@ -218,8 +216,8 @@
       planets.push({ mesh: planet, ...data });
     });
 
-    // Resize and zoom
-    function handleResizeAndZoom() {
+    // Resize handler
+    function handleResize() {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -228,45 +226,79 @@
         splineViewer.style.height = `${window.innerHeight}px`;
       }
     }
-    window.addEventListener('resize', handleResizeAndZoom);
-    renderer.domElement.addEventListener('wheel', (event) => {
-      event.preventDefault();
-      camera.position.z += event.deltaY * 0.05;
-      camera.position.z = Math.max(5, Math.min(20, camera.position.z));
-      handleResizeAndZoom();
-    });
-    document.addEventListener('keydown', (event) => {
-      if (event.key === '+' || event.key === '=') {
-        camera.position.z -= 0.5;
-        camera.position.z = Math.max(5, camera.position.z);
-      } else if (event.key === '-' || event.key === '_') {
-        camera.position.z += 0.5;
-        camera.position.z = Math.min(20, camera.position.z);
-      }
-      handleResizeAndZoom();
-    });
+    window.addEventListener('resize', handleResize);
 
     // Sidebar controls and avatar selection
     avatarColorInput.addEventListener('input', () => {
       console.log(`Color change to ${avatarColorInput.value} requested, not supported by Spline yet`);
     });
 
-    avatarSelect.addEventListener('change', () => {
-      const selectedUrl = avatarSelect.value;
-      const eventsTarget = avatarSelect.options[avatarSelect.selectedIndex].dataset.eventsTarget;
-      const background = avatarSelect.options[avatarSelect.selectedIndex].dataset.background;
-
+    function updateAvatarSelection(selectedUrl, index) {
       if (splineViewer) {
         splineViewer.remove();
       }
       splineViewer = document.createElement('spline-viewer');
       splineViewer.id = 'splineViewer';
       splineViewer.setAttribute('url', selectedUrl);
+      const eventsTarget = avatarSelect.options[index].dataset.eventsTarget;
+      const background = avatarSelect.options[index].dataset.background;
       if (eventsTarget) splineViewer.setAttribute('events-target', eventsTarget);
       if (background) splineViewer.setAttribute('background', background);
-      splineViewer.style.transform = `rotateY(${smoothedHeadX * 0.8}rad) rotateX(${smoothedHeadY * 0.8}rad) scale(1)`;
+      splineViewer.style.transform = `rotateY(${smoothedHeadX * 0.8}rad) rotateX(${twoFingerRotationX}rad) scale(${smoothedScale})`;
       document.body.appendChild(splineViewer);
+      avatarSelect.selectedIndex = index;
+    }
+
+    avatarSelect.addEventListener('change', () => {
+      const selectedUrl = avatarSelect.value;
+      const index = avatarSelect.selectedIndex;
+      updateAvatarSelection(selectedUrl, index);
     });
+
+    // Voice recognition setup
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event) => {
+        const last = event.results.length - 1;
+        const transcript = event.results[last][0].transcript.trim().toLowerCase();
+        console.log(`Voice input detected: ${transcript}`);
+
+        const numberMap = {
+          'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6,
+          '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6
+        };
+        const number = numberMap[transcript];
+        if (number >= 1 && number <= 6) {
+          const index = number - 1;
+          const selectedUrl = avatarSelect.options[index].value;
+          updateAvatarSelection(selectedUrl, index);
+          console.log(`Avatar ${number} selected via voice`);
+        } else {
+          console.log(`Invalid voice input: ${transcript}. Please say a number from 1 to 6.`);
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error(`Speech recognition error: ${event.error}`);
+        if (event.error === 'no-speech' || event.error === 'aborted') {
+          recognition.start();
+        }
+      };
+
+      recognition.onend = () => {
+        recognition.start();
+      };
+
+      recognition.start();
+    } else {
+      console.warn('SpeechRecognition API not supported in this browser.');
+      alert('Voice control is not supported in this browser. Please use a supported browser like Chrome.');
+    }
 
     // AI request handler
     submitRequestButton.addEventListener('click', () => {
@@ -281,17 +313,15 @@
       } else if (request.includes('change') && request.includes('size')) {
         const sizeMatch = request.match(/to\s+(\d+(\.\d+)?)/);
         if (sizeMatch && sizeMatch[1]) {
-          const size = parseFloat(sizeMatch[1]);
-          if (splineViewer) {
-            splineViewer.style.transform = `rotateY(${smoothedHeadX * 0.8}rad) rotateX(${smoothedHeadY * 0.8}rad) scale(${size})`;
-          }
+          smoothedScale = parseFloat(sizeMatch[1]);
+          updateModelTransform();
         }
       } else if (request.includes('add') || request.includes('remove')) {
         console.log(`${request} not supported by Spline model (e.g., hair, hat)`);
       } else {
         alert('Request not understood or not supported. Try: "change size to 2"');
       }
-      aiRequestInput.value = ''; // Clear input
+      aiRequestInput.value = '';
     });
 
     // Face Mesh setup
@@ -301,8 +331,8 @@
     faceMesh.setOptions({
       maxNumFaces: 1,
       refineLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
     });
     faceMesh.onResults(results => {
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
@@ -315,15 +345,21 @@
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
     });
     hands.setOptions({
-      maxNumHands: 1,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.8,
+      minTrackingConfidence: 0.8
     });
     hands.onResults(results => {
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        updateHandRotation(results.multiHandLandmarks[0]);
+        console.log(`Detected ${results.multiHandLandmarks.length} hands`);
+        updateHandRotation(results.multiHandLandmarks);
       } else {
         isTwoFingers = false;
+        lastPinchDist = 0;
+        lastHandX = 0;
+        lastHandY = 0;
+        console.log('No hands detected');
       }
     });
 
@@ -333,17 +369,18 @@
         await faceMesh.send({ image: video });
         await hands.send({ image: video });
       }
-      processTimeout = setTimeout(processVideo, 200);
+      processTimeout = setTimeout(processVideo, 50);
     }
     video.onloadeddata = () => processVideo();
 
     let smoothedHeadX = 0;
     let smoothedHeadY = 0;
+    let smoothedScale = 1.0;
     let isTwoFingers = false;
     let lastHandX = 0;
     let lastHandY = 0;
+    let lastPinchDist = 0;
     let twoFingerRotationX = 0;
-    let twoFingerRotationY = 0;
 
     function updateHeadRotation(landmarks) {
       const nose = landmarks[1];
@@ -354,35 +391,59 @@
       const yaw = (eyeCenterX - 0.5) * -2;
       const pitch = (nose.y - 0.5) * 2;
 
-      smoothedHeadX = THREE.MathUtils.lerp(smoothedHeadX, yaw, 0.5);
-      smoothedHeadY = THREE.MathUtils.lerp(smoothedHeadY, pitch, 0.5);
+      smoothedHeadX = THREE.MathUtils.lerp(smoothedHeadX, yaw, 0.4);
+      smoothedHeadY = THREE.MathUtils.lerp(smoothedHeadY, pitch, 0.4);
 
       updateModelTransform();
     }
 
     function updateHandRotation(landmarks) {
-      const indexTip = landmarks[8]; // Index finger tip
-      const middleTip = landmarks[12]; // Middle finger tip
-      const ringTip = landmarks[16]; // Ring finger tip (to check extension)
-
-      // Check if index and middle fingers are extended (higher than ring finger)
-      if (indexTip.y < ringTip.y - 0.1 && middleTip.y < ringTip.y - 0.1) {
-        isTwoFingers = true;
-        const handX = (indexTip.x + middleTip.x) / 2;
-        const handY = (indexTip.y + middleTip.y) / 2;
-
-        if (lastHandX !== 0 && lastHandY !== 0) {
-          const deltaX = handX - lastHandX;
-          const deltaY = handY - lastHandY;
-          twoFingerRotationY += deltaX * 5; // Horizontal movement affects Y rotation
-          twoFingerRotationX += deltaY * 5; // Vertical movement affects X rotation
+      // Pinch-to-zoom with two hands
+      if (landmarks.length === 2) {
+        const leftHand = landmarks[0];
+        const rightHand = landmarks[1];
+        const leftIndexTip = leftHand[8];
+        const rightIndexTip = rightHand[8];
+        const pinchDist = Math.sqrt(
+          Math.pow((leftIndexTip.x - rightIndexTip.x) * 320, 2) +
+          Math.pow((leftIndexTip.y - rightIndexTip.y) * 240, 2)
+        );
+        console.log(`Pinch distance: ${pinchDist.toFixed(2)}`);
+        if (lastPinchDist !== 0) {
+          const delta = pinchDist - lastPinchDist;
+          smoothedScale += delta * 0.005;
+          smoothedScale = THREE.MathUtils.clamp(smoothedScale, 0.5, 3.0);
+          console.log(`Scale updated to: ${smoothedScale.toFixed(2)}`);
         }
-        lastHandX = handX;
-        lastHandY = handY;
+        lastPinchDist = pinchDist;
       } else {
-        isTwoFingers = false;
-        lastHandX = 0;
-        lastHandY = 0;
+        lastPinchDist = 0;
+      }
+
+      // Two-finger tilt with one hand (X-axis rotation)
+      if (landmarks.length > 0) {
+        const hand = landmarks[0];
+        const indexTip = hand[8];
+        const middleTip = hand[12];
+        const ringTip = hand[16];
+
+        if (indexTip.y < ringTip.y - 0.05 && middleTip.y < ringTip.y - 0.05) {
+          isTwoFingers = true;
+          const handX = (indexTip.x + middleTip.x) / 2;
+          const handY = (indexTip.y + middleTip.y) / 2;
+
+          if (lastHandX !== 0) {
+            const deltaX = handX - lastHandX;
+            twoFingerRotationX += deltaX * 2;
+            console.log(`Tilt updated: X=${twoFingerRotationX.toFixed(2)}`);
+          }
+          lastHandX = handX;
+          lastHandY = handY;
+        } else {
+          isTwoFingers = false;
+          lastHandX = 0;
+          lastHandY = 0;
+        }
       }
 
       updateModelTransform();
@@ -390,10 +451,9 @@
 
     function updateModelTransform() {
       if (splineViewer) {
-        const currentScale = splineViewer.style.transform.match(/scale\(([^)]+)\)/)?.[1] || '1';
-        const rotationY = isTwoFingers ? twoFingerRotationY : smoothedHeadX * 0.8;
+        const rotationY = smoothedHeadX * 0.8;
         const rotationX = isTwoFingers ? twoFingerRotationX : smoothedHeadY * 0.8;
-        splineViewer.style.transform = `rotateY(${rotationY}rad) rotateX(${rotationX}rad) scale(${currentScale})`;
+        splineViewer.style.transform = `rotateY(${rotationY}rad) rotateX(${rotationX}rad) scale(${smoothedScale})`;
       }
     }
 
@@ -413,7 +473,7 @@
           }
         }
       }
-      return skinPixelCount > 2500;
+      return skinPixelCount > 2000;
     }
 
     function debouncePalm(palmVisible) {
@@ -425,20 +485,12 @@
         palmDebounce = setTimeout(() => {
           sidebar.classList.remove('open');
           sidebarOpen = false;
-        }, 1000);
+        }, 800);
       }
     }
 
-    // Blinking animation (simulated, not applicable to Spline)
+    // Blinking animation
     const clock = new THREE.Clock();
-    let lastBlinkTime = 0;
-    let blinkState = 'open';
-    let blinkTimer = 0;
-    const blinkDuration = 0.2;
-    const minBlinkInterval = 3;
-    const maxBlinkInterval = 5;
-    let nextBlinkInterval = minBlinkInterval + Math.random() * (maxBlinkInterval - minBlinkInterval);
-
     function updateBlink(delta) {
       console.log('Blinking animation requested, not supported by Spline yet');
     }
